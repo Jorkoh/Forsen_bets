@@ -4,7 +4,7 @@ from collections import Counter
 import matplotlib.pyplot as plt
 
 # True to scrap new data from web
-DATA_FROM_WEB = False
+DATA_FROM_WEB = True
 
 
 def main():
@@ -12,9 +12,9 @@ def main():
     bets = clean_and_sort_bets(bets)
 
     # print_most_common_top_predictors(bets)
-    # print_bet_results(bets)
-    print_outcome_pov(bets, True)
-    print_outcome_pov(bets, False)
+    print_bet_results(bets)
+    # print_outcome_pov(bets, True)
+    # print_outcome_pov(bets, False)
 
 
 def clean_and_sort_bets(bets):
