@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 images = {}
+rank_matcher_data = {}
+mouse_first_x = -1
+mouse_first_y = -1
 
 
 def scrape_stream():
@@ -46,24 +49,10 @@ def scrape_stream():
 
 def read_image(image):
     # ROI = image[y1:y2, x1:x2]
+    # sharpened = cv2.filter2D(image, -1,  np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]]))
+    # image_red_channel = image[:, :, 2]
 
-    # cv2.imshow('image', image)
-    # cv2.setMouseCallback('image', onMouse)
-    # cv2.waitKey()
-
-    image_red_channel = image[:, :, 2]
-
-    kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-    image_red_channel = cv2.filter2D(image_red_channel, -1, kernel)
-    image_red_channel = cv2.filter2D(image_red_channel, -1, kernel)
-    image_red_channel = cv2.threshold(image_red_channel, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-    image_red_channel = cv2.GaussianBlur(image_red_channel, (3, 3), 0)
-
-    image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    image_pre_blur = cv2.threshold(image_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-    image_post_blur = cv2.GaussianBlur(image_pre_blur, (3, 3), 0)
-
-    # Forsen card
+    # Forsen card TODO: white threshold this?
     forsen_card_og_vertex = np.float32([[84, 33], [426, 62], [82, 165], [427, 188]])
     forsen_card_warp_vertex = np.float32([[0, 0], [360, 0], [0, 135], [360, 135]])
     forsen_card_warp_matrix = cv2.getPerspectiveTransform(forsen_card_og_vertex, forsen_card_warp_vertex)
@@ -74,13 +63,11 @@ def read_image(image):
     forsen_rank = rank_detection(forsen_card[59:134, 2:181])
     print(f"Forsen rank: {forsen_rank}")
 
-    # Enemy card
+    # Enemy card TODO: white threshold this?
     enemy_card_og_vertex = np.float32([[1499, 64], [1844, 33], [1500, 186], [1842, 166]])
     enemy_card_warp_vertex = np.float32([[0, 0], [360, 0], [0, 135], [360, 135]])
     enemy_card_warp_matrix = cv2.getPerspectiveTransform(enemy_card_og_vertex, enemy_card_warp_vertex)
     enemy_card = cv2.warpPerspective(image, enemy_card_warp_matrix, (360, 135))
-
-    # TODO: white threshold this?
     add_image('enemy_name', gray_threshold_blur(enemy_card[2:44, 4:315]))
     add_image('enemy_wins', gray_threshold_blur(enemy_card[73:122, 1:107]))
     enemy_rank = rank_detection(enemy_card[60:134, 186:357])
@@ -98,7 +85,7 @@ def read_image(image):
     add_image('forsen_prowess', threshold_red(image[401:438, 98:250]))
     add_image('enemy_prowess', threshold_blue(image[402:435, 1660:1822]))
 
-    # Top stats
+    # Top stats TODO REDO THIS
     stat_og_vertex = np.float32([[15, 0], [60, 0], [0, 50], [50, 50]])
     stat_warp_vertex = np.float32([[0, 0], [50, 0], [0, 50], [50, 50]])
     stat_warp_matrix = cv2.getPerspectiveTransform(stat_og_vertex, stat_warp_vertex)
@@ -108,7 +95,8 @@ def read_image(image):
     # add_image('enemy_first_stat_letter', cv2.warpPerspective(image_pre_blur[525:569, 1715:1810], stat_warp_matrix, (86, 44)))
     # add_image('enemy_second_stat_letter', cv2.warpPerspective(image_pre_blur[589:633, 1675:1770], stat_warp_matrix, (86, 44)))
     # add_image('enemy_third_stat_letter', cv2.warpPerspective(image_pre_blur[650:694, 1625:1720], stat_warp_matrix, (86, 44)))
-    gray_filtered = cv2.threshold(cv2.GaussianBlur(cv2.inRange(image_gray, 190, 230), (3, 3), 0), 0, 255, cv2.THRESH_BINARY_INV)[1]
+    gray_filtered = \
+        cv2.threshold(cv2.GaussianBlur(cv2.inRange(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), 190, 230), (3, 3), 0), 0, 255, cv2.THRESH_BINARY_INV)[1]
     # add_image('forsen_first_stat_name', gray_filtered[524:575, 237:473])
     # add_image('forsen_second_stat_name', gray_filtered[587:638, 282:494])
     # add_image('forsen_third_stat_name', gray_filtered[648:697, 330:498])
@@ -117,15 +105,21 @@ def read_image(image):
     # add_image('enemy_third_stat_name', gray_filtered[646:698, 1399:1591])
 
     # Previous matches
-    forsen_previous_og_vertex = np.float32([[119, 902], [622, 872], [119, 944], [622, 909]])
-    forsen_previous_warp_vertex = np.float32([[0, 0], [600, 0], [0, 42], [600, 42]])
-    forsen_previous_warp_matrix = cv2.getPerspectiveTransform(forsen_previous_og_vertex, forsen_previous_warp_vertex)
-    # add_image('forsen_previous', cv2.warpPerspective(image[895:930, 115:624], forsen_previous_warp_matrix, (600, 42)))
+    forsen_previous_matches_coords = [[24, 55], [79, 52], [133, 49], [186, 45], [238, 42], [289, 39], [339, 35], [388, 32], [436, 28], [484, 26]]
+    forsen_previous = threshold_gold(image[870:945, 118:625])
+    forsen_previous_wins = sum(forsen_previous[coords[1], coords[0]] == 255 for coords in forsen_previous_matches_coords)
+    print(f"Forsen won {forsen_previous_wins} out of 10")
+    enemy_previous_matches_coords = [[20, 26], [65, 29], [112, 32], [159, 35], [207, 39], [256, 42], [306, 45], [339, 42]]
+    enemy_previous = threshold_gold(image[863:926, 1183:1527])
+    enemy_previous_wins = sum(enemy_previous[coords[1], coords[0]] == 255 for coords in enemy_previous_matches_coords)
+    print(f"Enemy won {enemy_previous_wins} out of 8")
 
-    transcribe_images()
-    print_transcriptions()
+    # transcribe_images()
+    # print_transcriptions()
     # show_images()
+    cv2.imshow("image", image)
     cv2.waitKey()
+    print("\n----------------\n\n")
 
 
 def gray_threshold_blur(image):
@@ -163,7 +157,15 @@ def threshold_red(image):
     return image
 
 
-rank_matcher_data = {}
+def threshold_gold(image):
+    # cv2.imshow("1", image)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    # cv2.imshow("2", image)
+    image = cv2.GaussianBlur(image, (9, 9), 0)
+    # cv2.imshow("3", image)
+    mask = cv2.inRange(image, (17, 45, 70), (60, 205, 255))
+    # cv2.imshow("4", mask)
+    return mask
 
 
 def prepare_rank_matcher_data():
@@ -174,6 +176,7 @@ def prepare_rank_matcher_data():
 
 
 def rank_detection(rank_card):
+    # https://docs.opencv.org/master/dc/dc3/tutorial_py_matcher.html
     rank_card = cv2.cvtColor(rank_card, cv2.COLOR_BGR2GRAY)
 
     highest_match = (0, 0)
@@ -185,12 +188,11 @@ def rank_detection(rank_card):
 
         flann_index_kdtree = 1
         index_params = dict(algorithm=flann_index_kdtree, trees=5)
-        search_params = dict(checks=50)  # or pass empty dictionary
+        search_params = dict(checks=50)
         flann = cv2.FlannBasedMatcher(index_params, search_params)
         matches = flann.knnMatch(des1, des2, k=2)
 
         good_matches = 0
-        # ratio test as per Lowe's paper
         for k, (m, n) in enumerate(matches):
             if m.distance < 0.7 * n.distance:
                 good_matches += 1
@@ -221,26 +223,21 @@ def add_image(title, image):
     images[title] = [image, '']
 
 
-first_x = -1
-first_y = -1
-
-
 def on_mouse_show_roi(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
-        global first_x
-        global first_y
-        if first_x == -1:
-            first_x = x
-            first_y = y
+        global mouse_first_x
+        global mouse_first_y
+        if mouse_first_x == -1:
+            mouse_first_x = x
+            mouse_first_y = y
         else:
-            print(f"[{first_y}:{y}, {first_x}:{x}]")
-            first_x = -1
-            first_y = -1
+            print(f"[{mouse_first_y}:{y}, {mouse_first_x}:{x}]")
+            mouse_first_x = -1
 
 
 def on_mouse_show_coordinates(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
-        print(f"x: {x}, y: {y}")
+        print(f"[{x},{y}]")
 
 
 def rotate_bound(image, angle):
