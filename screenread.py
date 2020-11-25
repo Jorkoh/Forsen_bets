@@ -5,7 +5,7 @@ import numpy as np
 import imutils
 import subprocess
 from datetime import datetime
-import matplotlib.pyplot as plt
+import argparse
 
 # Install opencv from https://stackoverflow.com/a/58991547
 # Install pytesseract exe from https://github.com/UB-Mannheim/tesseract/wiki
@@ -16,8 +16,8 @@ mouse_first_x = -1
 mouse_first_y = -1
 
 
-def scrape_stream():
-    streamlink = subprocess.Popen("streamlink \"https://www.twitch.tv/forsen\" best -O", stdout=subprocess.PIPE)
+def scrape_stream(stream):
+    streamlink = subprocess.Popen(f"streamlink {stream} best -O", stdout=subprocess.PIPE)
     ffmpeg = subprocess.Popen("ffmpeg -i pipe:0 -r 0.25 -pix_fmt bgr24 -vcodec rawvideo -an -sn -f image2pipe pipe:1",
                               stdin=streamlink.stdout, stdout=subprocess.PIPE, bufsize=1920 * 1080 * 3)
 
@@ -38,11 +38,7 @@ def scrape_stream():
 
         if text == "Match-Up Win Rate (World)\n\f":
             cooldown = 8
-            print("DETECTED CARD")
-            time = datetime.now().strftime("%H_%M_%S")
-            cv2.imwrite(f"images/img_alt_{time}.jpg", image)
-            print("SAVED CARD")
-
+            print("Card detected!")
             read_image(image)
 
 
@@ -50,25 +46,26 @@ def read_image(image):
     # ROI = image[y1:y2, x1:x2]
     # sharpened = cv2.filter2D(image, -1,  np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]]))
     # image_red_channel = image[:, :, 2]
+    print("Reading image...", end='')
 
     results = {}
 
-    # Forsen card TODO: white threshold this?
+    # Forsen card
     forsen_card_og_vertex = np.float32([[84, 33], [426, 62], [82, 165], [427, 188]])
     forsen_card_warp_vertex = np.float32([[0, 0], [360, 0], [0, 135], [360, 135]])
     forsen_card_warp_matrix = cv2.getPerspectiveTransform(forsen_card_og_vertex, forsen_card_warp_vertex)
     forsen_card = cv2.warpPerspective(image, forsen_card_warp_matrix, (360, 135))
-    results['forsen_name'] = transcribe(gray_threshold_blur(forsen_card[0:42, 45:358]))
-    results['forsen_wins'] = transcribe(gray_threshold_blur(forsen_card[68:127, 258:357]), correct_numbers=True)
+    results['forsen_name'] = transcribe(threshold_white(forsen_card[0:42, 45:358]))
+    results['forsen_wins'] = transcribe(threshold_white(forsen_card[68:127, 258:357]), correct_numbers=True, correct_wins=True)
     results['forsen_rank'] = rank_detection(forsen_card[59:134, 2:181])
 
-    # Enemy card TODO: white threshold this?
+    # Enemy card
     enemy_card_og_vertex = np.float32([[1499, 64], [1844, 33], [1500, 186], [1842, 166]])
     enemy_card_warp_vertex = np.float32([[0, 0], [360, 0], [0, 135], [360, 135]])
     enemy_card_warp_matrix = cv2.getPerspectiveTransform(enemy_card_og_vertex, enemy_card_warp_vertex)
     enemy_card = cv2.warpPerspective(image, enemy_card_warp_matrix, (360, 135))
-    results['enemy_name'] = transcribe(gray_threshold_blur(enemy_card[2:44, 4:315]))
-    results['enemy_wins'] = transcribe(gray_threshold_blur(enemy_card[73:122, 1:107]), correct_numbers=True)
+    results['enemy_name'] = transcribe(threshold_white(enemy_card[2:44, 4:315]))
+    results['enemy_wins'] = transcribe(threshold_white(enemy_card[73:122, 1:107]), correct_numbers=True, correct_wins=True)
     results['enemy_rank'] = rank_detection(enemy_card[60:134, 186:357])
 
     # Win rates
@@ -115,11 +112,19 @@ def read_image(image):
     enemy_previous = threshold_gold(image[863:926, 1183:1527])
     results['enemy_previous_wr'] = sum(enemy_previous[coords[1], coords[0]] == 255 for coords in enemy_previous_matches_coords) / 8.0
 
+    # TODO Map, might be easier to match the image
+    # map_og_vertex = np.float32([[12, 0], [377, 0], [0, 26], [365, 26]])
+    # map_warp_vertex = np.float32([[0, 0], [365, 0], [0, 26], [365, 26]])
+    # map_warp_matrix = cv2.getPerspectiveTransform(map_og_vertex, map_warp_vertex)
+    # cv2.warpPerspective(image[905:931, 777:1141], map_warp_matrix, (353, 26))
+
+    print("Done")
+    print("----RESULTS----")
     for result in results:
         print(f"{result}: {results[result]}")
-    cv2.imshow("image", image)
-    cv2.waitKey(0)
-    print("\n----------------\n\n")
+    print("---------------\n")
+    # cv2.imshow("image", image)
+    # cv2.waitKey(0)
 
 
 def gray_threshold_blur(image):
@@ -134,15 +139,15 @@ def gray_threshold_blur(image):
 
 
 def threshold_white(image):
-    cv2.imshow("1", image)
+    # cv2.imshow("1", image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    cv2.imshow("2", image)
-    mask = cv2.inRange(image, 190, 240)
-    cv2.imshow("3", mask)
+    # cv2.imshow("2", image)
+    mask = cv2.inRange(image, 180, 240)
+    # cv2.imshow("3", mask)
     image = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY_INV)[1]
-    cv2.imshow("4", image)
+    # cv2.imshow("4", image)
     image = cv2.GaussianBlur(image, (3, 3), 0)
-    cv2.imshow("5", image)
+    # cv2.imshow("5", image)
     return image
 
 
@@ -192,28 +197,18 @@ def red_background_to_black(image):
 
 
 def blue_background_to_black(image):
-    # cv2.imshow("1", image)
     image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    # cv2.imshow("2", image_hsv)
     mask = cv2.inRange(image_hsv, (102, 115, 10), (113, 240, 89))
-    # cv2.imshow("3", mask)
     mask = cv2.GaussianBlur(mask, (3, 3), 0)
-    # cv2.imshow("4", mask)
     image = apply_brightness_contrast(image, 20, 20)
-    # cv2.imshow("5", image)
     image[np.where(mask != [0])] = [0, 0, 0]
-    # cv2.imshow("6", image)
     return image
 
 
 def threshold_gold(image):
-    # cv2.imshow("1", image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    # cv2.imshow("2", image)
     image = cv2.GaussianBlur(image, (9, 9), 0)
-    # cv2.imshow("3", image)
     mask = cv2.inRange(image, (17, 45, 70), (60, 205, 255))
-    # cv2.imshow("4", mask)
     return mask
 
 
@@ -240,10 +235,12 @@ def apply_brightness_contrast(image, brightness=0, contrast=0):
 
 
 def prepare_rank_matcher_data():
+    print("Preparing rank matcher...", end='')
     for rank in range(1, 36):
         rank_template = cv2.cvtColor(cv2.imread(f"rank_images/{rank}.png"), cv2.COLOR_BGR2GRAY)
         sift = cv2.SIFT_create()
         rank_matcher_data[rank] = sift.detectAndCompute(rank_template, None)
+    print("Done")
 
 
 def rank_detection(rank_card):
@@ -273,19 +270,24 @@ def rank_detection(rank_card):
     return highest_match[0]
 
 
-def transcribe(image, correct_stat_grade=False, correct_stat_name=False, correct_numbers=False):
+def transcribe(image, correct_stat_grade=False, correct_stat_name=False, correct_numbers=False, correct_wins=False):
     text = pytesseract.image_to_string(imutils.resize(image, width=400), config='--psm 7')[:-2]
     if correct_stat_grade:
         text = text.replace('5', 'D').replace('8', 'B').replace('Cc', 'C').replace('Ss', 'S')
-    elif correct_stat_name:
+    if correct_stat_name:
         stat_names = ['Combo Damage', 'Defensive Ability', 'Throw Countering', 'Agility', 'Rage Usage',
                       'Aggressiveness', 'Side Stepping', 'Punishment Proficiency', 'Tenacity']
         for name in stat_names:
             if name in text:
                 text = name
                 break
-    elif correct_numbers:
-        text = text.replace('O', '0')
+    if correct_numbers:
+        text = text.replace('O', '0').replace('|', '1').replace('l', '1').replace('I', '1')
+    if correct_wins:
+        if text[-1] == 'W':
+            text = text[:-1]
+            if text[-1] == ' ':
+                text = text[:-1]
     return text
 
 
@@ -307,7 +309,18 @@ def on_mouse_show_coordinates(event, x, y, flags, param):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--stream')
+    group.add_argument('--folder')
+    args = parser.parse_args()
+
     prepare_rank_matcher_data()
-    # scrape_stream()
-    for image_file in os.scandir("images"):
-        read_image(cv2.imread(image_file.path))
+    if args.stream:
+        print(f"Scraping stream with URL: {args.stream}")
+        scrape_stream(args.stream)
+    else:
+        print(f"Reading images from folder: {args.folder}\n")
+        for image_file in os.scandir(args.folder):
+            print(f"Image: {image_file.name}")
+            read_image(cv2.imread(image_file.path))
