@@ -16,8 +16,8 @@ mouse_first_y = -1
 
 
 def scrape_stream(stream):
-    streamlink = subprocess.Popen(f"streamlink {stream} best -O", stdout=subprocess.PIPE)
-    ffmpeg = subprocess.Popen("ffmpeg -i pipe:0 -r 0.25 -pix_fmt bgr24 -vcodec rawvideo -an -sn -f image2pipe pipe:1",
+    streamlink = subprocess.Popen(f"streamlink {stream}  best -O", stdout=subprocess.PIPE)
+    ffmpeg = subprocess.Popen("ffmpeg -i pipe:0 -r 0.25 -pix_fmt bgr24 -loglevel quiet -vcodec rawvideo -an -sn -f image2pipe pipe:1",
                               stdin=streamlink.stdout, stdout=subprocess.PIPE, bufsize=1920 * 1080 * 3)
 
     cooldown = 0
