@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 # Install pytesseract exe from https://github.com/UB-Mannheim/tesseract/wiki
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-images = {}
 rank_matcher_data = {}
 mouse_first_x = -1
 mouse_first_y = -1
@@ -52,80 +51,98 @@ def read_image(image):
     # sharpened = cv2.filter2D(image, -1,  np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]]))
     # image_red_channel = image[:, :, 2]
 
+    results = {}
+
     # Forsen card TODO: white threshold this?
     forsen_card_og_vertex = np.float32([[84, 33], [426, 62], [82, 165], [427, 188]])
     forsen_card_warp_vertex = np.float32([[0, 0], [360, 0], [0, 135], [360, 135]])
     forsen_card_warp_matrix = cv2.getPerspectiveTransform(forsen_card_og_vertex, forsen_card_warp_vertex)
     forsen_card = cv2.warpPerspective(image, forsen_card_warp_matrix, (360, 135))
-
-    add_image('forsen_name', gray_threshold_blur(forsen_card[0:42, 45:358]))
-    add_image('forsen_wins', gray_threshold_blur(forsen_card[68:127, 258:357]))
-    forsen_rank = rank_detection(forsen_card[59:134, 2:181])
-    print(f"Forsen rank: {forsen_rank}")
+    results['forsen_name'] = transcribe(gray_threshold_blur(forsen_card[0:42, 45:358]))
+    results['forsen_wins'] = transcribe(gray_threshold_blur(forsen_card[68:127, 258:357]), correct_numbers=True)
+    results['forsen_rank'] = rank_detection(forsen_card[59:134, 2:181])
 
     # Enemy card TODO: white threshold this?
     enemy_card_og_vertex = np.float32([[1499, 64], [1844, 33], [1500, 186], [1842, 166]])
     enemy_card_warp_vertex = np.float32([[0, 0], [360, 0], [0, 135], [360, 135]])
     enemy_card_warp_matrix = cv2.getPerspectiveTransform(enemy_card_og_vertex, enemy_card_warp_vertex)
     enemy_card = cv2.warpPerspective(image, enemy_card_warp_matrix, (360, 135))
-    add_image('enemy_name', gray_threshold_blur(enemy_card[2:44, 4:315]))
-    add_image('enemy_wins', gray_threshold_blur(enemy_card[73:122, 1:107]))
-    enemy_rank = rank_detection(enemy_card[60:134, 186:357])
-    print(f"Enemy rank: {enemy_rank}")
+    results['enemy_name'] = transcribe(gray_threshold_blur(enemy_card[2:44, 4:315]))
+    results['enemy_wins'] = transcribe(gray_threshold_blur(enemy_card[73:122, 1:107]), correct_numbers=True)
+    results['enemy_rank'] = rank_detection(enemy_card[60:134, 186:357])
 
     # Win rates
-    add_image('forsen_mu_wr_world', threshold_red(image[49:87, 622:715]))
-    add_image('forsen_mu_wr_personal', threshold_red(image[104:141, 638:732]))
-    add_image('forsen_stage_wr', threshold_red(image[158:196, 665:758]))
-    add_image('enemy_mu_wr_world', threshold_blue(image[52:87, 1209:1299]))
-    add_image('enemy_mu_wr_personal', threshold_blue(image[105:142, 1187:1276]))
-    add_image('enemy_stage_wr', threshold_blue(image[158:196, 1163:1253]))
+    results['forsen_mu_wr_world'] = transcribe(threshold_red(image[49:87, 622:715]), correct_numbers=True)
+    results['forsen_mu_wr_personal'] = transcribe(threshold_red(image[104:141, 638:732]), correct_numbers=True)
+    results['forsen_stage_wr'] = transcribe(threshold_red(image[158:196, 665:758]), correct_numbers=True)
+    results['enemy_mu_wr_world'] = transcribe(threshold_blue(image[52:87, 1209:1299]), correct_numbers=True)
+    results['enemy_mu_wr_personal'] = transcribe(threshold_blue(image[105:142, 1187:1276]), correct_numbers=True)
+    results['enemy_stage_wr'] = transcribe(threshold_blue(image[158:196, 1163:1253]), correct_numbers=True)
 
     # Prowess
-    add_image('forsen_prowess', threshold_red(image[401:438, 98:250]))
-    add_image('enemy_prowess', threshold_blue(image[402:435, 1660:1822]))
+    results['forsen_prowess'] = transcribe(threshold_red(image[401:438, 98:250]))
+    results['enemy_prowess'] = transcribe(threshold_blue(image[402:435, 1660:1822]))
 
-    # Top stats TODO REDO THIS
-    stat_og_vertex = np.float32([[15, 0], [60, 0], [0, 50], [50, 50]])
+    # Top stats
+    stat_og_vertex = np.float32([[12, 0], [60, 0], [0, 50], [50, 50]])
     stat_warp_vertex = np.float32([[0, 0], [50, 0], [0, 50], [50, 50]])
     stat_warp_matrix = cv2.getPerspectiveTransform(stat_og_vertex, stat_warp_vertex)
-    # add_image('forsen_first_stat_letter', cv2.warpPerspective(image_pre_blur[526:570, 105:200], stat_warp_matrix, (86, 44)))
-    # add_image('forsen_second_stat_letter', cv2.warpPerspective(image_pre_blur[588:632, 155:250], stat_warp_matrix, (86, 44)))
-    # add_image('forsen_third_stat_letter', cv2.warpPerspective(image_pre_blur[648:692, 200:295], stat_warp_matrix, (86, 44)))
-    # add_image('enemy_first_stat_letter', cv2.warpPerspective(image_pre_blur[525:569, 1715:1810], stat_warp_matrix, (86, 44)))
-    # add_image('enemy_second_stat_letter', cv2.warpPerspective(image_pre_blur[589:633, 1675:1770], stat_warp_matrix, (86, 44)))
-    # add_image('enemy_third_stat_letter', cv2.warpPerspective(image_pre_blur[650:694, 1625:1720], stat_warp_matrix, (86, 44)))
-    gray_filtered = \
-        cv2.threshold(cv2.GaussianBlur(cv2.inRange(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), 190, 230), (3, 3), 0), 0, 255, cv2.THRESH_BINARY_INV)[1]
-    # add_image('forsen_first_stat_name', gray_filtered[524:575, 237:473])
-    # add_image('forsen_second_stat_name', gray_filtered[587:638, 282:494])
-    # add_image('forsen_third_stat_name', gray_filtered[648:697, 330:498])
-    # add_image('enemy_first_stat_name', gray_filtered[523:572, 1449:1684])
-    # add_image('enemy_second_stat_name', gray_filtered[585:635, 1460:1637])
-    # add_image('enemy_third_stat_name', gray_filtered[646:698, 1399:1591])
+    results['forsen_first_stat_letter'] = transcribe(gray_threshold_blur(red_background_to_black(
+        cv2.warpPerspective(image[526:570, 105:200], stat_warp_matrix, (86, 44)))), correct_stat_grade=True)
+    results['forsen_second_stat_letter'] = transcribe(gray_threshold_blur(red_background_to_black(
+        cv2.warpPerspective(image[588:632, 155:250], stat_warp_matrix, (86, 44)))), correct_stat_grade=True)
+    results['forsen_third_stat_letter'] = transcribe(gray_threshold_blur(red_background_to_black(
+        cv2.warpPerspective(image[648:692, 200:295], stat_warp_matrix, (86, 44)))), correct_stat_grade=True)
+    results['enemy_first_stat_letter'] = transcribe(gray_threshold_blur(blue_background_to_black(
+        cv2.warpPerspective(image[525:569, 1715:1810], stat_warp_matrix, (86, 44)))), correct_stat_grade=True)
+    results['enemy_second_stat_letter'] = transcribe(gray_threshold_blur(blue_background_to_black(
+        cv2.warpPerspective(image[589:633, 1675:1770], stat_warp_matrix, (86, 44)))), correct_stat_grade=True)
+    results['enemy_third_stat_letter'] = transcribe(gray_threshold_blur(blue_background_to_black(
+        cv2.warpPerspective(image[650:694, 1625:1720], stat_warp_matrix, (86, 44)))), correct_stat_grade=True)
+
+    results['forsen_first_stat_name'] = transcribe(threshold_white(image[524:575, 237:524]), correct_stat_name=True)
+    results['forsen_second_stat_name'] = transcribe(threshold_white(image[587:638, 282:569]), correct_stat_name=True)
+    results['forsen_third_stat_name'] = transcribe(threshold_white(image[648:697, 330:617]), correct_stat_name=True)
+    results['enemy_first_stat_name'] = transcribe(threshold_white(image[523:572, 1397:1684]), correct_stat_name=True)
+    results['enemy_second_stat_name'] = transcribe(threshold_white(image[585:635, 1350:1637]), correct_stat_name=True)
+    results['enemy_third_stat_name'] = transcribe(threshold_white(image[646:698, 1304:1591]), correct_stat_name=True)
 
     # Previous matches
     forsen_previous_matches_coords = [[24, 55], [79, 52], [133, 49], [186, 45], [238, 42], [289, 39], [339, 35], [388, 32], [436, 28], [484, 26]]
     forsen_previous = threshold_gold(image[870:945, 118:625])
-    forsen_previous_wins = sum(forsen_previous[coords[1], coords[0]] == 255 for coords in forsen_previous_matches_coords)
-    print(f"Forsen won {forsen_previous_wins} out of 10")
+    results['forsen_previous_wr'] = sum(forsen_previous[coords[1], coords[0]] == 255 for coords in forsen_previous_matches_coords) / 10.0
     enemy_previous_matches_coords = [[20, 26], [65, 29], [112, 32], [159, 35], [207, 39], [256, 42], [306, 45], [339, 42]]
     enemy_previous = threshold_gold(image[863:926, 1183:1527])
-    enemy_previous_wins = sum(enemy_previous[coords[1], coords[0]] == 255 for coords in enemy_previous_matches_coords)
-    print(f"Enemy won {enemy_previous_wins} out of 8")
+    results['enemy_previous_wr'] = sum(enemy_previous[coords[1], coords[0]] == 255 for coords in enemy_previous_matches_coords) / 8.0
 
-    # transcribe_images()
-    # print_transcriptions()
-    # show_images()
+    for result in results:
+        print(f"{result}: {results[result]}")
     cv2.imshow("image", image)
-    cv2.waitKey()
+    cv2.waitKey(0)
     print("\n----------------\n\n")
 
 
 def gray_threshold_blur(image):
+    # cv2.imshow("1", image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # cv2.imshow("2", image)
     image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+    # cv2.imshow("3", image)
     image = cv2.GaussianBlur(image, (3, 3), 0)
+    # cv2.imshow("4", image)
+    return image
+
+
+def threshold_white(image):
+    cv2.imshow("1", image)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    cv2.imshow("2", image)
+    mask = cv2.inRange(image, 190, 240)
+    cv2.imshow("3", mask)
+    image = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY_INV)[1]
+    cv2.imshow("4", image)
+    image = cv2.GaussianBlur(image, (3, 3), 0)
+    cv2.imshow("5", image)
     return image
 
 
@@ -146,7 +163,7 @@ def threshold_red(image):
     # cv2.imshow("1", image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     # cv2.imshow("2", image)
-    mask1 = cv2.inRange(image, (176, 230, 200), (181, 255, 255))
+    mask1 = cv2.inRange(image, (176, 230, 200), (180, 255, 255))
     mask2 = cv2.inRange(image, (0, 230, 200), (2, 255, 255))
     mask = cv2.bitwise_or(mask1, mask2)
     # cv2.imshow("3", mask)
@@ -154,6 +171,38 @@ def threshold_red(image):
     # cv2.imshow("4", image)
     image = cv2.GaussianBlur(image, (3, 3), 0)
     # cv2.imshow("5", image)
+    return image
+
+
+def red_background_to_black(image):
+    # cv2.imshow("1", image)
+    image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    # cv2.imshow("2", image_hsv)
+    mask1 = cv2.inRange(image_hsv, (120, 50, 10), (180, 255, 52))
+    mask2 = cv2.inRange(image_hsv, (0, 50, 10), (2, 255, 52))
+    mask = cv2.bitwise_or(mask1, mask2)
+    # cv2.imshow("3", mask)
+    mask = cv2.GaussianBlur(mask, (3, 3), 0)
+    # cv2.imshow("4", mask)
+    image = apply_brightness_contrast(image, 20, 20)
+    # cv2.imshow("5", image)
+    image[np.where(mask != [0])] = [0, 0, 0]
+    # cv2.imshow("6", image)
+    return image
+
+
+def blue_background_to_black(image):
+    # cv2.imshow("1", image)
+    image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    # cv2.imshow("2", image_hsv)
+    mask = cv2.inRange(image_hsv, (102, 115, 10), (113, 240, 89))
+    # cv2.imshow("3", mask)
+    mask = cv2.GaussianBlur(mask, (3, 3), 0)
+    # cv2.imshow("4", mask)
+    image = apply_brightness_contrast(image, 20, 20)
+    # cv2.imshow("5", image)
+    image[np.where(mask != [0])] = [0, 0, 0]
+    # cv2.imshow("6", image)
     return image
 
 
@@ -166,6 +215,28 @@ def threshold_gold(image):
     mask = cv2.inRange(image, (17, 45, 70), (60, 205, 255))
     # cv2.imshow("4", mask)
     return mask
+
+
+def apply_brightness_contrast(image, brightness=0, contrast=0):
+    if brightness != 0:
+        if brightness > 0:
+            shadow = brightness
+            highlight = 255
+        else:
+            shadow = 0
+            highlight = 255 + brightness
+        alpha_b = (highlight - shadow) / 255
+        gamma_b = shadow
+        buf = cv2.addWeighted(image, alpha_b, image, 0, gamma_b)
+    else:
+        buf = image.copy()
+
+    if contrast != 0:
+        f = 131 * (contrast + 127) / (127 * (131 - contrast))
+        alpha_c = f
+        gamma_c = 127 * (1 - f)
+        buf = cv2.addWeighted(buf, alpha_c, buf, 0, gamma_c)
+    return buf
 
 
 def prepare_rank_matcher_data():
@@ -202,25 +273,20 @@ def rank_detection(rank_card):
     return highest_match[0]
 
 
-def show_images():
-    for image_name in images:
-        cv2.imshow(image_name, images[image_name][0])
-
-
-def transcribe_images():
-    for image_name in images:
-        # 1, 3, 7? https://wilsonmar.github.io/tesseract/
-        images[image_name][1] = pytesseract.image_to_string(images[image_name][0], config='--psm 7')[:-2]
-
-
-def print_transcriptions():
-    for image_name in images:
-        print(f"{image_name}: {images[image_name][1]}")
-
-
-def add_image(title, image):
-    image = imutils.resize(image, width=400)
-    images[title] = [image, '']
+def transcribe(image, correct_stat_grade=False, correct_stat_name=False, correct_numbers=False):
+    text = pytesseract.image_to_string(imutils.resize(image, width=400), config='--psm 7')[:-2]
+    if correct_stat_grade:
+        text = text.replace('5', 'D').replace('8', 'B').replace('Cc', 'C').replace('Ss', 'S')
+    elif correct_stat_name:
+        stat_names = ['Combo Damage', 'Defensive Ability', 'Throw Countering', 'Agility', 'Rage Usage',
+                      'Aggressiveness', 'Side Stepping', 'Punishment Proficiency', 'Tenacity']
+        for name in stat_names:
+            if name in text:
+                text = name
+                break
+    elif correct_numbers:
+        text = text.replace('O', '0')
+    return text
 
 
 def on_mouse_show_roi(event, x, y, flags, param):
@@ -238,27 +304,6 @@ def on_mouse_show_roi(event, x, y, flags, param):
 def on_mouse_show_coordinates(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
         print(f"[{x},{y}]")
-
-
-def rotate_bound(image, angle):
-    # grab the dimensions of the image and then determine the
-    # center
-    (h, w) = image.shape[:2]
-    (cX, cY) = (w // 2, h // 2)
-    # grab the rotation matrix (applying the negative of the
-    # angle to rotate clockwise), then grab the sine and cosine
-    # (i.e., the rotation components of the matrix)
-    M = cv2.getRotationMatrix2D((cX, cY), -angle, 1.0)
-    cos = np.abs(M[0, 0])
-    sin = np.abs(M[0, 1])
-    # compute the new bounding dimensions of the image
-    nW = int((h * sin) + (w * cos))
-    nH = int((h * cos) + (w * sin))
-    # adjust the rotation matrix to take into account translation
-    M[0, 2] += (nW / 2) - cX
-    M[1, 2] += (nH / 2) - cY
-    # perform the actual rotation and return the image
-    return cv2.warpAffine(image, M, (nW, nH))
 
 
 if __name__ == "__main__":
