@@ -45,7 +45,7 @@ def read_image(image):
     # ROI = image[y1:y2, x1:x2]
     # sharpened = cv2.filter2D(image, -1,  np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]]))
     # image_red_channel = image[:, :, 2]
-    print("Reading image...", end='')
+    print("Reading image...", end='', flush=True)
 
     results = {}
 
@@ -207,7 +207,7 @@ def apply_brightness_contrast(image, brightness=0, contrast=0):
 
 
 def prepare_rank_matcher_data():
-    print("Preparing rank matcher...", end='')
+    print("Preparing rank matcher...", end='', flush=True)
     for rank in range(1, 36):
         rank_template = cv2.cvtColor(cv2.imread(f"rank_images/{rank}.png"), cv2.COLOR_BGR2GRAY)
         sift = cv2.SIFT_create()
