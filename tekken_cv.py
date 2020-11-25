@@ -4,10 +4,9 @@ import pytesseract
 import numpy as np
 import imutils
 import subprocess
-from datetime import datetime
 import argparse
 
-# Install opencv from https://stackoverflow.com/a/58991547
+# Install opencv from https://stackoverflow.com/a/58991547 if using PyCharm
 # Install pytesseract exe from https://github.com/UB-Mannheim/tesseract/wiki
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
@@ -123,76 +122,49 @@ def read_image(image):
     for result in results:
         print(f"{result}: {results[result]}")
     print("---------------\n")
-    # cv2.imshow("image", image)
-    # cv2.waitKey(0)
 
 
 def gray_threshold_blur(image):
-    # cv2.imshow("1", image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # cv2.imshow("2", image)
     image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-    # cv2.imshow("3", image)
     image = cv2.GaussianBlur(image, (3, 3), 0)
-    # cv2.imshow("4", image)
     return image
 
 
 def threshold_white(image):
-    # cv2.imshow("1", image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # cv2.imshow("2", image)
     mask = cv2.inRange(image, 180, 240)
-    # cv2.imshow("3", mask)
     image = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY_INV)[1]
-    # cv2.imshow("4", image)
     image = cv2.GaussianBlur(image, (3, 3), 0)
-    # cv2.imshow("5", image)
     return image
 
 
 def threshold_blue(image):
-    # cv2.imshow("1", image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    # cv2.imshow("2", image)
     mask = cv2.inRange(image, (102, 175, 180), (107, 220, 255))
-    # cv2.imshow("3", mask)
     image = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY_INV)[1]
-    # cv2.imshow("4", image)
     image = cv2.GaussianBlur(image, (3, 3), 0)
-    # cv2.imshow("5", image)
     return image
 
 
 def threshold_red(image):
-    # cv2.imshow("1", image)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    # cv2.imshow("2", image)
     mask1 = cv2.inRange(image, (176, 230, 200), (180, 255, 255))
     mask2 = cv2.inRange(image, (0, 230, 200), (2, 255, 255))
     mask = cv2.bitwise_or(mask1, mask2)
-    # cv2.imshow("3", mask)
     image = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY_INV)[1]
-    # cv2.imshow("4", image)
     image = cv2.GaussianBlur(image, (3, 3), 0)
-    # cv2.imshow("5", image)
     return image
 
 
 def red_background_to_black(image):
-    # cv2.imshow("1", image)
     image_hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    # cv2.imshow("2", image_hsv)
     mask1 = cv2.inRange(image_hsv, (120, 50, 10), (180, 255, 52))
     mask2 = cv2.inRange(image_hsv, (0, 50, 10), (2, 255, 52))
     mask = cv2.bitwise_or(mask1, mask2)
-    # cv2.imshow("3", mask)
     mask = cv2.GaussianBlur(mask, (3, 3), 0)
-    # cv2.imshow("4", mask)
     image = apply_brightness_contrast(image, 20, 20)
-    # cv2.imshow("5", image)
     image[np.where(mask != [0])] = [0, 0, 0]
-    # cv2.imshow("6", image)
     return image
 
 
